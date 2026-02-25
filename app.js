@@ -1,5 +1,5 @@
 /**
- * app.js — Frontend JS Chat Logic (Enhanced with Markdown Support)
+ * app.js — Frontend JS Chat Logic (Enhanced with Markdown Support & Ultimate Timer Protection - English Version)
  */
 
 "use strict";
@@ -41,6 +41,12 @@ const elThinking = document.getElementById("thinking");
 const messages = [];
 
 /* =========================
+   全域狀態管理器 (Global State Manager for Ultimate Protection)
+========================= */
+window.isChatFetching = false;
+window.globalReqId = 0;
+
+/* =========================
    Utilities
 ========================= */
 
@@ -51,16 +57,18 @@ function scrollToBottom() {
 }
 
 /**
- * Toggle "thinking" animation
+ * Toggle "thinking" animation (Enhanced lock protection)
  */
 function setThinking(on) {
-  if (!elThinking) return;
+  if (elThinking) {
+    if (on) elThinking.classList.remove("hidden");
+    else elThinking.classList.add("hidden");
+  }
+
   if (on) {
-    elThinking.classList.remove("hidden");
     if (elBtnSend) elBtnSend.disabled = true;
     if (elInput) elInput.disabled = true;
   } else {
-    elThinking.classList.add("hidden");
     if (elBtnSend) elBtnSend.disabled = false;
     if (elInput) elInput.disabled = false;
     elInput?.focus();
@@ -92,13 +100,8 @@ function escapeHtml(text) {
  */
 function isHtmlFormat(text) {
   if (!text || typeof text !== 'string') return false;
-
-  // 檢查是否包含 HTML 標籤
   const htmlTagPattern = /<\/?[a-z][\s\S]*>/i;
-
-  // 檢查常見的 HTML 標籤
   const commonHtmlTags = /<(p|div|span|h[1-6]|ul|ol|li|a|strong|em|br|img|table|tr|td|th)[\s>]/i;
-
   return htmlTagPattern.test(text) || commonHtmlTags.test(text);
 }
 
@@ -107,27 +110,21 @@ function isHtmlFormat(text) {
  */
 function processContent(text) {
   if (!text || typeof text !== 'string') return '';
+  if (isHtmlFormat(text)) return text;
 
-  // 如果已經是 HTML 格式，直接返回
-  if (isHtmlFormat(text)) {
-    return text;
-  }
-
-  // 檢查是否有 Markdown 特徵
   const markdownPatterns = [
-    /^#{1,6}\s/m,           // 標題 # ## ###
-    /\*\*.*\*\*/,           // 粗體 **text**
-    /\*.*\*/,               // 斜體 *text*
-    /\[.*\]\(.*\)/,         // 連結 [text](url)
-    /^\s*[-*+]\s/m,         // 無序列表
-    /^\s*\d+\.\s/m,         // 有序列表
-    /```[\s\S]*```/,        // 程式碼區塊
-    /`[^`]+`/,              // 行內程式碼
+    /^#{1,6}\s/m,
+    /\*\*.*\*\*/,
+    /\*.*\*/,
+    /\[.*\]\(.*\)/,
+    /^\s*[-*+]\s/m,
+    /^\s*\d+\.\s/m,
+    /```[\s\S]*```/,
+    /`[^`]+`/,
   ];
 
   const hasMarkdown = markdownPatterns.some(pattern => pattern.test(text));
 
-  // 如果有 Markdown 特徵，進行轉換
   if (hasMarkdown && typeof marked !== 'undefined') {
     try {
       return marked.parse(text);
@@ -137,7 +134,6 @@ function processContent(text) {
     }
   }
 
-  // 既不是 HTML 也不是 Markdown，當作純文字處理
   return escapeHtml(text).replace(/\n/g, '<br>');
 }
 
@@ -161,11 +157,9 @@ function render() {
   for (const m of messages) {
     const isUser = m.role === "user";
 
-    // Row container
     const row = document.createElement("div");
     row.className = `msg ${isUser ? "user" : "bot"}`;
 
-    // Avatar
     const avatar = document.createElement("img");
     avatar.className = "avatar";
     avatar.src = isUser
@@ -173,18 +167,15 @@ function render() {
       : 'https://raw.githubusercontent.com/justin-321-hub/2026_TAIPEI_101_RUN_UP/refs/heads/main/assets/bot.jpg';
     avatar.alt = isUser ? "you" : "bot";
 
-    // Message bubble
     const bubble = document.createElement("div");
     bubble.className = "bubble";
 
     if (isUser) {
       bubble.innerHTML = escapeHtml(m.text).replace(/\n/g, '<br>');
     } else {
-      // ★ 使用新的 processContent 函數處理機器人回應
       bubble.innerHTML = processContent(m.text);
     }
 
-    // Assembly
     row.appendChild(avatar);
     row.appendChild(bubble);
     elMessages.appendChild(row);
@@ -194,7 +185,7 @@ function render() {
 }
 
 /* =========================
-   Call backend logic (independent error counters)
+   Call backend logic
 ========================= */
 
 async function sendText(text, retryCounts = {}) {
@@ -208,14 +199,16 @@ async function sendText(text, retryCounts = {}) {
   if (!retryCounts.incompleteMarkers) retryCounts.incompleteMarkers = 0;
   if (!retryCounts.httpErrors) retryCounts.httpErrors = 0;
 
-  // Check if this is the first request
   const isFirstRequest =
     retryCounts.emptyResponse === 0 &&
     retryCounts.incompleteMarkers === 0 &&
     retryCounts.httpErrors === 0;
 
-  // Only show user message and clear input on first call
   if (isFirstRequest) {
+    // ★ Lock mechanism: Drop new requests if one is already fetching
+    if (window.isChatFetching) return;
+    window.isChatFetching = true;
+
     const userMsg = { id: uid(), role: "user", text: content, ts: Date.now() };
     messages.push(userMsg);
     if (elInput) elInput.value = "";
@@ -223,6 +216,42 @@ async function sendText(text, retryCounts = {}) {
   }
 
   setThinking(true);
+
+  // ==========================================
+  // Nuclear Protection: Independent Request ID & Global Cleanup
+  // ==========================================
+  window.globalReqId++;
+  const currentReqId = window.globalReqId; 
+
+  const clearAllTempMessages = () => {
+    let hasTemp = false;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].isTemp) {
+        messages.splice(i, 1);
+        hasTemp = true;
+      }
+    }
+    if (hasTemp) render();
+  };
+
+  const updateTempMsg = (msgText) => {
+    // Identity verification: Destroy timer action if it doesn't match the current request
+    if (currentReqId !== window.globalReqId) return;
+    if (!window.isChatFetching) return;
+
+    const existingIdx = messages.findIndex(m => m.isTemp === true);
+    if (existingIdx === -1) {
+      messages.push({ id: uid(), role: "assistant", text: msgText, ts: Date.now(), isTemp: true });
+    } else {
+      messages[existingIdx].text = msgText;
+    }
+    render();
+  };
+
+  // Set English temporary messages
+  setTimeout(() => updateTempMsg("Searching deeply for information..."), 4000);
+  setTimeout(() => updateTempMsg("Information retrieved, sending response..."), 8000);
+  // ==========================================
 
   try {
     const res = await fetch(api("/api/chat"), {
@@ -234,7 +263,7 @@ async function sendText(text, retryCounts = {}) {
       body: JSON.stringify({
         text: contentToSend,
         clientId,
-        language: "繁體中文",
+        language: "English", // ★ Changed to English here for better backend context
         role: "user"
       }),
     });
@@ -242,7 +271,6 @@ async function sendText(text, retryCounts = {}) {
     const raw = await res.text();
     let data;
 
-    // Simplified JSON parsing, wrap as errorRaw on failure
     try {
       data = raw ? JSON.parse(raw) : {};
     } catch {
@@ -254,14 +282,9 @@ async function sendText(text, retryCounts = {}) {
     if (commonHttpErrors.includes(res.status)) {
       if (retryCounts.httpErrors === 0) {
         retryCounts.httpErrors++;
+        clearAllTempMessages(); 
         setThinking(false);
-        const retryMsg = {
-          id: uid(),
-          role: "assistant",
-          text: "Network is unstable, retrying your request.",
-          ts: Date.now(),
-        };
-        messages.push(retryMsg);
+        messages.push({ id: uid(), role: "assistant", text: "Network is unstable, retrying your request.", ts: Date.now() });
         render();
         await new Promise(resolve => setTimeout(resolve, 1000));
         return sendText(content, retryCounts);
@@ -270,7 +293,6 @@ async function sendText(text, retryCounts = {}) {
       }
     }
 
-    // ★★★ 4. Other HTTP Errors ★★★
     if (!res.ok) {
       throw new Error("Sorry, the network is unstable. Please try again later.");
     }
@@ -280,17 +302,12 @@ async function sendText(text, retryCounts = {}) {
       let isEmptyResponse = false;
 
       if (typeof data === "object" && data !== null) {
-        const isPlainEmptyObject =
-          !Array.isArray(data) &&
-          Object.keys(data).filter(k => k !== 'clientId').length === 0;
-
+        const isPlainEmptyObject = !Array.isArray(data) && Object.keys(data).filter(k => k !== 'clientId').length === 0;
         const hasTextField = 'text' in data || 'message' in data;
 
         if (hasTextField) {
           const textValue = data.text !== undefined ? data.text : data.message;
-          if (textValue === "" || textValue === null || textValue === undefined) {
-            isEmptyResponse = true;
-          }
+          if (textValue === "" || textValue === null || textValue === undefined) isEmptyResponse = true;
         } else if (isPlainEmptyObject) {
           isEmptyResponse = true;
         }
@@ -298,14 +315,9 @@ async function sendText(text, retryCounts = {}) {
 
       if (isEmptyResponse && retryCounts.emptyResponse === 0) {
         retryCounts.emptyResponse++;
+        clearAllTempMessages(); 
         setThinking(false);
-        const retryMsg = {
-          id: uid(),
-          role: "assistant",
-          text: "Network is unstable, retrying your request.",
-          ts: Date.now(),
-        };
-        messages.push(retryMsg);
+        messages.push({ id: uid(), role: "assistant", text: "Network is unstable, retrying your request.", ts: Date.now() });
         render();
         await new Promise(resolve => setTimeout(resolve, 1000));
         return sendText(content, retryCounts);
@@ -316,7 +328,6 @@ async function sendText(text, retryCounts = {}) {
       }
     }
 
-    // Process reply text (HTML)
     let replyText;
     if (typeof data === "string") {
       replyText = data.trim() || "Please rephrase your question, thank you.";
@@ -324,20 +335,10 @@ async function sendText(text, retryCounts = {}) {
       const hasTextField = 'text' in data || 'message' in data;
       if (hasTextField) {
         const textValue = data.text !== undefined ? data.text : data.message;
-        if (textValue === "" || textValue === null || textValue === undefined) {
-          replyText = "Please rephrase your question, thank you.";
-        } else {
-          replyText = String(textValue).trim() || "Please rephrase your question, thank you.";
-        }
+        replyText = textValue === "" || textValue === null || textValue === undefined ? "Please rephrase your question, thank you." : String(textValue).trim() || "Please rephrase your question, thank you.";
       } else {
-        const isPlainEmptyObject =
-          !Array.isArray(data) &&
-          Object.keys(data).filter(k => k !== 'clientId').length === 0;
-        if (isPlainEmptyObject) {
-          replyText = "Network is unstable, please try again.";
-        } else {
-          replyText = JSON.stringify(data, null, 2);
-        }
+        const isPlainEmptyObject = !Array.isArray(data) && Object.keys(data).filter(k => k !== 'clientId').length === 0;
+        replyText = isPlainEmptyObject ? "Network is unstable, please try again." : JSON.stringify(data, null, 2);
       }
     } else {
       replyText = "Please rephrase your question, thank you.";
@@ -347,31 +348,27 @@ async function sendText(text, retryCounts = {}) {
     if (containsIncompleteMarkers(replyText)) {
       if (retryCounts.incompleteMarkers === 0) {
         retryCounts.incompleteMarkers++;
+        clearAllTempMessages(); 
         setThinking(false);
-        const thinkingMsg = {
-          id: uid(),
-          role: "assistant",
-          text: "Still thinking, please wait.",
-          ts: Date.now(),
-        };
-        messages.push(thinkingMsg);
+        messages.push({ id: uid(), role: "assistant", text: "Still thinking, please wait.", ts: Date.now() });
         render();
         await new Promise(resolve => setTimeout(resolve, 1000));
         return sendText(content, retryCounts);
       } else {
-        // Second failure, show error message and return
+        clearAllTempMessages(); 
+        window.isChatFetching = false; 
         setThinking(false);
-        const errorMsg = {
-          id: uid(),
-          role: "assistant",
-          text: "Sorry, the network is unstable. Please try again later.",
-          ts: Date.now(),
-        };
-        messages.push(errorMsg);
+        messages.push({ id: uid(), role: "assistant", text: "Sorry, the network is unstable. Please try again later.", ts: Date.now() });
         render();
         return;
       }
     }
+
+    // ==========================================
+    // ★★★ Perfect Ending: Cleanup and Unlock ★★★
+    // ==========================================
+    clearAllTempMessages();
+    window.isChatFetching = false; 
 
     // Push bot message
     const botMsg = { id: uid(), role: "assistant", text: replyText, ts: Date.now() };
@@ -380,29 +377,21 @@ async function sendText(text, retryCounts = {}) {
     render();
 
   } catch (err) {
+    // ==========================================
+    // ★★★ Error Catch: Cleanup and Unlock ★★★
+    // ==========================================
+    clearAllTempMessages();
+    window.isChatFetching = false;
     setThinking(false);
 
-    // ★★★ 5. Offline Status Check ★★★
     if (!navigator.onLine) {
-      const offlineMsg = {
-        id: uid(),
-        role: "assistant",
-        text: "You are currently offline. Please check your network connection and try again.",
-        ts: Date.now(),
-      };
-      messages.push(offlineMsg);
+      messages.push({ id: uid(), role: "assistant", text: "You are currently offline. Please check your network connection and try again.", ts: Date.now() });
       render();
       return;
     }
 
     const friendly = `${err?.message || err}`;
-    const botErr = {
-      id: uid(),
-      role: "assistant",
-      text: friendly,
-      ts: Date.now(),
-    };
-    messages.push(botErr);
+    messages.push({ id: uid(), role: "assistant", text: friendly, ts: Date.now() });
     render();
   }
 }
