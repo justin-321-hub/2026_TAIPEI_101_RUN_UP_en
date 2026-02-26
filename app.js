@@ -411,7 +411,7 @@ window.addEventListener("load", () => elInput?.focus());
 messages.push({
   id: uid(),
   role: "assistant",
-  text: "Welcome to the 2026 Taipei 101 Charity Run Up! Feel free to ask me any event-related questions!",
+  text: "Welcome to the 2026 CTBC Taipei 101 Charity Run Up! Feel free to ask me any event-related questions!",
   ts: Date.now(),
 });
 
