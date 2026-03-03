@@ -249,7 +249,7 @@ async function sendText(text, retryCounts = {}) {
   };
 
   // Set English temporary messages
-  setTimeout(() => updateTempMsg("Searching deeply for information..."), 4000);
+  setTimeout(() => updateTempMsg("I’m speeding up the search for you...."), 4000);
   setTimeout(() => updateTempMsg("Information retrieved, sending response..."), 8000);
   // ==========================================
 
@@ -411,7 +411,7 @@ window.addEventListener("load", () => elInput?.focus());
 messages.push({
   id: uid(),
   role: "assistant",
-  text: "Welcome to the 2026 CTBC Taipei 101 Charity Run Up! Feel free to ask me any event-related questions!",
+  text: "Welcome to the 2026 CTBC Taipei 101 Charity Run Up! <br>Feel free to ask me any event-related questions!",
   ts: Date.now(),
 });
 
